@@ -1,0 +1,262 @@
+---
+title: "sandbox-model-sim"
+author: "Curtis Kephart"
+date: "2016"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE, message=F}
+require(ggplot2)
+require(dplyr)
+require(ggvis)
+require(shiny)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+
+****
+
+## Tobler's hiking function 
+
+Walking velocity:
+$$
+W=6e^{\displaystyle-3.5\left\vert\frac{dh}{dx}+0.05\right\vert}
+$$
+
+$$
+\frac{dh}{dx}=S=\tan\Theta
+$$
+
+where
+
+- $dh$ = elevation difference,
+- $dx$ = distance,
+- $S$ = slope,
+- $\Theta$ = angle of slope (inclination).
+
+
+```{r base-tobler, echo = F, warning=F}
+slopes <- seq(-.80,.80, by = 0.01)
+walkspeed_1 <- function(slope = -0.05, 
+                        maxS = 3.4, # max speed
+                        bSlope = 0.05 # fastest slope
+                        ){
+  maxS * exp(-3.5 * abs(tan(slope) + bSlope))
+}
+speeds <- walkspeed_1(slopes)
+
+
+ggplot(
+  data = (
+    data.frame(
+      slope = slopes,
+      speed = speeds
+    )
+  ),
+  aes(
+    x = slope,
+    y = speed
+  )
+) + 
+  geom_line() +
+  theme_minimal() +
+  xlab("Slope (in degrees)") +
+  ylab("Walking Speed (mph)") +
+  ggtitle("Tobler's hiking function")
+
+```
+
+
+
+
+
+****
+
+## Modified Tobler's  Trail Speed Model
+Walking velocity:
+$$
+V = V_m e^{\displaystyle(Sp)\left\vert\frac{dh}{dx}+0.05\right\vert}
+$$
+
+$$
+\frac{dh}{dx} = S = \tan\Theta
+$$
+
+where
+
+- $S$ = slope,
+- $dh$ = elevation difference,
+- $dx$ = distance,
+- $V_m$ = maximum speed.
+- $\phi$ = fitness
+- $Sp$ = shape of relationships between slope and speed
+- $\Theta$ = angle of slope (inclination).
+
+The model continues to assume top travel speeds are at a downward angle of 5 degrees. 
+
+A slope beyond 90 degrees means you are either rock climbing or falling, and so velocity approximately zero. 
+
+Given sufficient hiker speed observations over various elevation profiles and different experience levels, we can estimate the model's maximum speed, fitness, and shape parameters. 
+
+
+
+
+```{r mod-tobler, echo=F, cache = F, fig.width=6}
+
+walkspeed <- function(slope = -0.05, 
+                      V_m = 3.4, # max speed
+                      Sp = -3.5, # shape
+                      bSlope = 0.05, # fastest slope
+                      phi = 1.5, # fitness
+                      week = 1 # of hiking
+                      ){
+  (V_m - phi/week) * exp((Sp) * abs(tan(slope) + bSlope))
+}
+
+sim = data.frame(
+  slope = c(
+    runif(5000, -0.8,0.8),
+    rnorm(6000, 0,0.2)
+  ))
+sim$week = runif(length(sim$slope), 1, 10)
+
+  
+sim <- sim %>%
+  mutate(
+    speed = walkspeed(
+      slope = slope,
+      V_m = 3.4, 
+      bSlope = 0.05,
+      #phi = 0.99,
+      week = week
+    ) + rnorm(n(), 0, sd = 0.05),
+    speed = ifelse(speed <= 0, NA, speed)
+  ) %>%
+  tbl_df()
+
+
+ggplot(
+  data = sim,
+  aes(
+    x = slope,
+    y = speed,
+    colour = week
+  )
+) + 
+  geom_point() +
+  theme_minimal() +
+  xlab("Slope (in degrees)") +
+  ylab("Walking Speed (mph)")
+
+
+
+
+```
+
+
+Note that at lower `week`s (experience) the hiker travels more slowly. 
+
+
+## Estimating the Trail Speed Function
+
+```{r, echo = T}
+
+est_hs <- function(data = data){
+  # data is a data.frame with: 
+  # - speed var: of speeds
+  # - slope var: of slopes associated with those speeds
+  # - week  var: the number of weeks of hiking, experience/fitness
+  
+  # stage 1
+  # - est Sp coefficient 
+  reg.s1 <- lm(
+    log(speed) ~ tan(abs(slope)),
+    data = data
+  ) 
+  
+  data$yhat <- exp(predict(reg.s1, data)) 
+  data <- data %>%
+    mutate(
+      #truspeed = (V_m - 1.5/week) * exp(exp(-3.5 * abs(tan(slope) + 0.05)),
+      resid = speed/(yhat /  exp(reg.s1$coefficients[1])),
+      nuweek = 1/week
+    )
+  
+  # stage 2 
+  # - est phi fitness coefficient
+  # - est V_m max speed coefficient 
+  reg.s2 <- lm(
+    resid ~ I(-1*nuweek),
+    data = data
+  )
+
+  result <- list(
+    V_m = as.numeric(reg.s2$coefficients[1]), 
+    Sp =  as.numeric(reg.s1$coefficients[2]),
+    phi = as.numeric(reg.s2$coefficients[2])
+  )
+  
+  
+}
+
+
+est <- est_hs(sim)
+est
+
+```
+
+```{r, cache = F, echo = F}
+
+sliderInput("week", "Weeks of hiking:", min = 1, max = 10, value = 9)
+
+p <-  ggplot(
+  data = sim,
+  aes(
+    x = slope,
+    y = speed,
+    colour = week
+  )
+) + 
+  geom_point(alpha = 0.5) +
+  theme_minimal() +
+  xlab("Slope (in degrees)") +
+  ylab("Walking Speed (mph)")
+
+renderPlot({
+  
+  sim.est <- data.frame(
+    slope = seq(-0.7,0.7,by = 0.01),
+    week = input$week
+  ) %>% 
+    mutate(
+      speed = walkspeed(
+        slope = slope, 
+        Sp = est$Sp,
+        V_m = est$V_m,
+        phi = est$phi,
+        week = week
+      )
+    )
+  
+  
+  p <- p + 
+    geom_line(
+      data = sim.est,
+      aes(
+        x = slope,
+        y = speed
+      ),
+      color = "black",
+      size = 2
+    ) 
+  p 
+  
+})
+```
+
+
+
+
