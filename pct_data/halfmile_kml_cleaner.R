@@ -3,7 +3,7 @@ library(httr)
 library(dplyr)
 
 #load halfmile's orginal KML dataset (not kmz... unzip the kmz)
-data <- xmlParse("C:/Users/OKComputer/Documents/PCT Prep Maps and more/HalfmilePCT2016.kml")
+data <- xmlParse("pct_data/scr-data/HalfmilePCT2016.kml")
 xml_data <- xmlToList(data)
 
 # Debugbing Exploring XML -----
