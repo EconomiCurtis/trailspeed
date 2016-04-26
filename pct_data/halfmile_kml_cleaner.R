@@ -6,7 +6,7 @@ library(dplyr)
 data <- xmlParse("C:/Users/OKComputer/Documents/PCT Prep Maps and more/HalfmilePCT2016.kml")
 xml_data <- xmlToList(data)
 
-# Debugbing XML -----
+# Debugbing Exploring XML -----
 # #Line maps of Cal
 # names(xml_data[["Document"]][[46]][[3]][[3]][[3]])
 # 
@@ -27,7 +27,7 @@ CA_Sec_F <- xml_data[["Document"]][[46]][[3]][[7]][[2]]
 CA_Sec_G <- xml_data[["Document"]][[46]][[3]][[8]][[2]]
 
 CA_Sec_H <- xml_data[["Document"]][[46]][[4]][[2]][[2]]
-CA_Sec_I_Yo <- xml_data[["Document"]][[46]][[4]][[3]][[3]]
+CA_Sec_I_Yo <- xml_data[["Document"]][[46]][[4]][[3]][[3]] # tuolumne -> Yosemite vally
 
 PCT_Trip <- list(
   CA_Sec_A,CA_Sec_B,CA_Sec_C,CA_Sec_D,CA_Sec_E,CA_Sec_F,CA_Sec_G,CA_Sec_H,CA_Sec_I_Yo
@@ -233,8 +233,10 @@ PCT_Data_ele <- left_join(
 
 PCT_Data_ele <- PCT_Data_ele %>%
   select(
-    
+    -Alt, -dist
   )
+PCT_Data_ele <- PCT_Data_ele %>%
+  select(dist_mil, dist_step_ft, elevation, elevation_ft, Lat, Long, section, dist_km)
 
 
 write.csv(
