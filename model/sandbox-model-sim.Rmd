@@ -11,6 +11,7 @@ require(ggplot2)
 require(dplyr)
 require(ggvis)
 require(shiny)
+require(codetools)
 
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(cache = TRUE)
@@ -104,7 +105,7 @@ Given sufficient hiker speed observations over various elevation profiles and di
 
 
 
-```{r mod-tobler, echo=F, cache = F, fig.width=6}
+```{r mod-tobler, echo=F, cache = F, fig.width=6, warning=F}
 
 walkspeed <- function(slope = -0.05, 
                       V_m = 3.4, # max speed
